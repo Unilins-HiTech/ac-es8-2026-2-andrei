@@ -1,11 +1,25 @@
+// app.js
+
 const pacientes = [];
+
+let quantidadeJSON = 0;
+let quantidadeManual = 0;
 
 const formulario = document.getElementById('form-paciente');
 const tabela = document.getElementById('tabela-pacientes');
+const tabelaCompleta = document.getElementById('tabela');
 const mensagemCarregando = document.getElementById('carregando');
+
+const contadorJSON = document.getElementById('contador-json');
+const contadorManual = document.getElementById('contador-manual');
 
 function adicionarPaciente(nome, email, nascimento) {
 	pacientes.push({ nome, email, nascimento });
+}
+
+function atualizarContadores() {
+	contadorJSON.textContent = quantidadeJSON;
+	contadorManual.textContent = quantidadeManual;
 }
 
 function renderizarTabela() {
@@ -13,48 +27,77 @@ function renderizarTabela() {
 
 	pacientes.forEach((paciente) => {
 		const linha = document.createElement('tr');
+
 		linha.innerHTML = `
-      <td>${paciente.nome}</td>
-      <td>${paciente.email}</td>
-      <td>${formatarData(paciente.nascimento)}</td>
-    `;
+			<td>${paciente.nome}</td>
+			<td>${paciente.email}</td>
+			<td>${formatarData(paciente.nascimento)}</td>
+		`;
+
 		tabela.appendChild(linha);
 	});
 }
 
 function formatarData(dataISO) {
 	const [ano, mes, dia] = dataISO.split('-');
+
 	return `${dia}/${mes}/${ano}`;
 }
 
-// Nova função: busca os pacientes iniciais a partir do arquivo JSON
 async function carregarPacientesIniciais() {
 	try {
-		const resposta = await fetch('data/pacientes.json');
-		console.log(resposta);
+		mensagemCarregando.style.display = 'block';
+		mensagemCarregando.textContent = 'Carregando pacientes...';
 
-		// Nem toda resposta é sucesso — precisamos checar antes de usar
+		await new Promise((resolve) => setTimeout(resolve, 1000));
+
+		const resposta = await fetch('./pacientes.json');
+
 		if (!resposta.ok) {
 			throw new Error(`Erro HTTP: ${resposta.status}`);
 		}
 
-		const dados = await resposta.json(); // converte a resposta em objeto JS
+		const dados = await resposta.json();
 
-		// Adiciona cada paciente vindo do arquivo ao nosso array local
+		if (dados.length === 0) {
+			mensagemCarregando.textContent =
+				'Nenhum paciente cadastrado ainda';
+
+			tabelaCompleta.style.display = 'none';
+
+			quantidadeJSON = 0;
+
+			atualizarContadores();
+
+			return;
+		}
+
 		dados.forEach((paciente) => {
-			adicionarPaciente(paciente.nome, paciente.email, paciente.nascimento);
+			adicionarPaciente(
+				paciente.nome,
+				paciente.email,
+				paciente.nascimento
+			);
 		});
 
-		renderizarTabela();
-	} catch (erro) {
-		console.error('Não foi possível carregar os pacientes:', erro);
-		mensagemCarregando.textContent =
-			'Erro ao carregar pacientes. Veja o console para mais detalhes.';
-		return; // sai da função sem esconder a mensagem de erro
-	}
+		quantidadeJSON = dados.length;
 
-	mensagemCarregando.textContent = 'Dados carregados com sucesso.';
-	// mensagemCarregando.style.display = 'none'; // esconde "Carregando..." em caso de sucesso
+		atualizarContadores();
+		renderizarTabela();
+
+		tabelaCompleta.style.display = '';
+		mensagemCarregando.style.display = 'none';
+
+	} catch (erro) {
+		console.error('Erro ao carregar pacientes:', erro);
+
+		tabelaCompleta.style.display = 'none';
+
+		mensagemCarregando.style.display = 'block';
+
+		mensagemCarregando.textContent =
+			'Não foi possível carregar os pacientes.';
+	}
 }
 
 formulario.addEventListener('submit', (event) => {
@@ -65,10 +108,18 @@ formulario.addEventListener('submit', (event) => {
 	const nascimento = document.getElementById('nascimento').value;
 
 	adicionarPaciente(nome, email, nascimento);
+
+	quantidadeManual++;
+
+	atualizarContadores();
+
+	tabelaCompleta.style.display = '';
+
 	renderizarTabela();
+
+	mensagemCarregando.style.display = 'none';
 
 	formulario.reset();
 });
 
-// Assim que o script carrega, já dispara a busca dos dados iniciais
 carregarPacientesIniciais();
