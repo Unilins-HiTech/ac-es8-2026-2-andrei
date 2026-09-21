@@ -25,9 +25,16 @@
 
     <h1 class="mb-4">Usuários (JSONPlaceholder)</h1>
 
-    <p id="carregando" class="text-muted">
-      Carregando usuários...
-    </p>
+    <!-- Spinner de carregamento -->
+    <div id="carregando" class="text-center my-4">
+
+      <div class="spinner-border text-primary" role="status">
+
+        <span class="visually-hidden">Carregando...</span>
+
+      </div>
+
+    </div>
 
     <!-- Campo de busca -->
     <div class="mb-4">
@@ -44,7 +51,7 @@
     <!-- Tela 1: lista de usuários -->
     <div id="tela-lista" class="row g-3"></div>
 
-    <!-- Tela 2: detalhe de um usuário -->
+    <!-- Tela 2: posts do usuário -->
     <div id="tela-detalhe" class="d-none">
 
       <button
@@ -59,7 +66,6 @@
         class="h4 mb-2"
       ></h2>
 
-      <!-- Contador de posts -->
       <p
         id="contador-posts"
         class="text-muted"
@@ -67,6 +73,27 @@
 
       <ul
         id="lista-posts"
+        class="list-group"
+      ></ul>
+
+    </div>
+
+    <!-- Tela 3: comentários do post -->
+    <div id="tela-comentarios" class="d-none">
+
+      <button
+        id="btn-voltar-posts"
+        class="btn btn-outline-secondary mb-3"
+      >
+        ← Voltar
+      </button>
+
+      <h2 class="h4 mb-3">
+        Comentários
+      </h2>
+
+      <ul
+        id="lista-comentarios"
         class="list-group"
       ></ul>
 
