@@ -1,5 +1,5 @@
-
-const URL_API = 'http://localhost:3000/pacientes';
+﻿
+const URL_API = 'https://ac-es8-2026-2-andrei.onrender.com/pacientes';
 
 const formulario = document.getElementById('form-paciente');
 const tabela = document.getElementById('tabela-pacientes');
@@ -35,7 +35,7 @@ function criarCelula(texto) {
   return celula;
 }
 
-// Ler mensagens específicas da API
+// Ler mensagens especÃ­ficas da API
 async function verificarResposta(resposta) {
   if (!resposta.ok) {
     let mensagemErro = `Erro HTTP: ${resposta.status}`;
@@ -44,7 +44,7 @@ async function verificarResposta(resposta) {
       const dados = await resposta.json();
       mensagemErro = dados.erro || mensagemErro;
     } catch {
-      // Mantém a mensagem HTTP original
+      // MantÃ©m a mensagem HTTP original
     }
 
     throw new Error(mensagemErro);
@@ -128,7 +128,7 @@ async function listarPacientes() {
     mensagemCarregando.style.display = 'none';
 
     mostrarMensagem(
-      `Não foi possível carregar os pacientes: ${erro.message}`
+      `NÃ£o foi possÃ­vel carregar os pacientes: ${erro.message}`
     );
   }
 }
@@ -163,7 +163,7 @@ async function excluirPaciente(id) {
     await verificarResposta(resposta);
 
     mostrarMensagem(
-      'Paciente excluído com sucesso.',
+      'Paciente excluÃ­do com sucesso.',
       'success'
     );
 
@@ -175,7 +175,7 @@ async function excluirPaciente(id) {
   }
 }
 
-// Evento do formulário
+// Evento do formulÃ¡rio
 formulario.addEventListener('submit', async event => {
   event.preventDefault();
 
@@ -202,8 +202,9 @@ formulario.addEventListener('submit', async event => {
   }
 });
 
-// Cancelar edição
+// Cancelar ediÃ§Ã£o
 botaoCancelar.addEventListener('click', limparFormulario);
 
 // Carregar os pacientes ao iniciar
 listarPacientes();
+
