@@ -1,0 +1,25 @@
+
+body {
+  background-color: #f5f7fb;
+  font-family: Arial, sans-serif;
+}
+
+.container {
+  background-color: white;
+  border-radius: 12px;
+  padding: 30px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+}
+
+h1 {
+  color: #234e83;
+  font-weight: bold;
+}
+
+.table {
+  margin-top: 20px;
+}
+
+.btn {
+  border-radius: 6px;
+}
