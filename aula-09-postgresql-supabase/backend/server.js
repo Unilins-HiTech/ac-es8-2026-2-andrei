@@ -1,39 +1,18 @@
 
 const express = require('express');
 const cors = require('cors');
+const pool = require('./banco');
 
 const app = express();
 
 app.use(cors());
 app.use(express.json());
 
-// Banco de dados em memória
-const pacientes = [
-  {
-    id: 1,
-    nome: 'Maria Silva',
-    email: 'maria.silva@email.com',
-    nascimento: '1990-04-12'
-  },
-  {
-    id: 2,
-    nome: 'João Pereira',
-    email: 'joao.pereira@email.com',
-    nascimento: '1985-11-30'
-  },
-  {
-    id: 3,
-    nome: 'Ana Costa',
-    email: 'ana.costa@email.com',
-    nascimento: '2001-07-08'
-  }
-];
-
-let proximoId = 4;
+const COLUNAS = 'id, nome, email, nascimento';
 
 // Validar os dados dos pacientes
 function validarPaciente(dados, parcial = false) {
-  const { nome, email, nascimento } = dados;
+  const { nome, email, nascimento } = dados ?? {};
 
   if (!parcial && (!nome || !email || !nascimento)) {
     return 'Nome, e-mail e nascimento são obrigatórios';
@@ -63,7 +42,6 @@ function validarPaciente(dados, parcial = false) {
     }
 
     const data = new Date(`${nascimento}T00:00:00Z`);
-    const hoje = new Date();
 
     if (
       Number.isNaN(data.getTime()) ||
@@ -72,6 +50,7 @@ function validarPaciente(dados, parcial = false) {
       return 'Informe uma data de nascimento válida';
     }
 
+    const hoje = new Date();
     const hojeISO = [
       hoje.getFullYear(),
       String(hoje.getMonth() + 1).padStart(2, '0'),
@@ -86,50 +65,96 @@ function validarPaciente(dados, parcial = false) {
   return null;
 }
 
-// Verificar se o e-mail já pertence a outro paciente
-function emailDuplicado(email, ignorarId = null) {
-  return pacientes.some(p =>
-    p.id !== ignorarId &&
-    p.email.toLowerCase() === email.toLowerCase()
-  );
+// Validar ID
+function idValido(id) {
+  return Number.isInteger(id) && id > 0;
+}
+
+// Tratar erros do PostgreSQL
+function tratarErro(res, erro) {
+  console.error(erro);
+
+  if (erro.code === '23505') {
+    return res.status(409).json({
+      erro: 'Este e-mail já está cadastrado'
+    });
+  }
+
+  res.status(500).json({
+    erro: 'Erro interno do servidor'
+  });
 }
 
 // GET - Listar pacientes e filtrar por nome
-app.get('/pacientes', (req, res) => {
-  const nome = req.query.nome;
+app.get('/pacientes', async (req, res) => {
+  try {
+    const nome = req.query.nome;
 
-  if (nome) {
-    const filtrados = pacientes.filter(p =>
-      p.nome.toLowerCase().includes(String(nome).toLowerCase())
+    if (nome) {
+      const resultado = await pool.query(
+        `SELECT ${COLUNAS} FROM pacientes
+         WHERE nome ILIKE $1 ORDER BY id`,
+        [`%${nome}%`]
+      );
+
+      return res.json(resultado.rows);
+    }
+
+    const resultado = await pool.query(
+      `SELECT ${COLUNAS} FROM pacientes ORDER BY id`
     );
 
-    return res.json(filtrados);
+    res.json(resultado.rows);
+  } catch (erro) {
+    tratarErro(res, erro);
   }
-
-  res.json(pacientes);
 });
 
 // GET - Total de pacientes
-app.get('/pacientes/total', (req, res) => {
-  res.json({ total: pacientes.length });
+app.get('/pacientes/total', async (req, res) => {
+  try {
+    const resultado = await pool.query(
+      'SELECT COUNT(*) FROM pacientes'
+    );
+
+    res.json({
+      total: Number(resultado.rows[0].count)
+    });
+  } catch (erro) {
+    tratarErro(res, erro);
+  }
 });
 
 // GET - Buscar paciente pelo ID
-app.get('/pacientes/:id', (req, res) => {
+app.get('/pacientes/:id', async (req, res) => {
   const id = Number(req.params.id);
-  const paciente = pacientes.find(p => p.id === id);
 
-  if (!paciente) {
-    return res.status(404).json({
-      erro: 'Paciente não encontrado'
+  if (!idValido(id)) {
+    return res.status(400).json({
+      erro: 'ID inválido'
     });
   }
 
-  res.json(paciente);
+  try {
+    const resultado = await pool.query(
+      `SELECT ${COLUNAS} FROM pacientes WHERE id = $1`,
+      [id]
+    );
+
+    if (resultado.rowCount === 0) {
+      return res.status(404).json({
+        erro: 'Paciente não encontrado'
+      });
+    }
+
+    res.json(resultado.rows[0]);
+  } catch (erro) {
+    tratarErro(res, erro);
+  }
 });
 
 // POST - Cadastrar paciente
-app.post('/pacientes', (req, res) => {
+app.post('/pacientes', async (req, res) => {
   const dados = req.body ?? {};
   const erro = validarPaciente(dados);
 
@@ -139,32 +164,27 @@ app.post('/pacientes', (req, res) => {
 
   const { nome, email, nascimento } = dados;
 
-  if (emailDuplicado(email)) {
-    return res.status(409).json({
-      erro: 'Este e-mail já está cadastrado'
-    });
+  try {
+    const resultado = await pool.query(
+      `INSERT INTO pacientes (nome, email, nascimento)
+       VALUES ($1, $2, $3)
+       RETURNING ${COLUNAS}`,
+      [nome.trim(), email.trim(), nascimento]
+    );
+
+    res.status(201).json(resultado.rows[0]);
+  } catch (erro) {
+    tratarErro(res, erro);
   }
-
-  const novoPaciente = {
-    id: proximoId++,
-    nome: nome.trim(),
-    email: email.trim(),
-    nascimento
-  };
-
-  pacientes.push(novoPaciente);
-
-  res.status(201).json(novoPaciente);
 });
 
-// PUT - Atualizar todos os dados do paciente
-app.put('/pacientes/:id', (req, res) => {
+// PUT - Atualizar todos os dados
+app.put('/pacientes/:id', async (req, res) => {
   const id = Number(req.params.id);
-  const paciente = pacientes.find(p => p.id === id);
 
-  if (!paciente) {
-    return res.status(404).json({
-      erro: 'Paciente não encontrado'
+  if (!idValido(id)) {
+    return res.status(400).json({
+      erro: 'ID inválido'
     });
   }
 
@@ -177,32 +197,38 @@ app.put('/pacientes/:id', (req, res) => {
 
   const { nome, email, nascimento } = dados;
 
-  if (emailDuplicado(email, id)) {
-    return res.status(409).json({
-      erro: 'Este e-mail já está cadastrado'
-    });
+  try {
+    const resultado = await pool.query(
+      `UPDATE pacientes
+       SET nome = $1, email = $2, nascimento = $3
+       WHERE id = $4
+       RETURNING ${COLUNAS}`,
+      [nome.trim(), email.trim(), nascimento, id]
+    );
+
+    if (resultado.rowCount === 0) {
+      return res.status(404).json({
+        erro: 'Paciente não encontrado'
+      });
+    }
+
+    res.json(resultado.rows[0]);
+  } catch (erro) {
+    tratarErro(res, erro);
   }
-
-  paciente.nome = nome.trim();
-  paciente.email = email.trim();
-  paciente.nascimento = nascimento;
-
-  res.json(paciente);
 });
 
-// PATCH - Atualizar apenas os dados enviados
-app.patch('/pacientes/:id', (req, res) => {
+// PATCH - Atualizar apenas os campos enviados
+app.patch('/pacientes/:id', async (req, res) => {
   const id = Number(req.params.id);
-  const paciente = pacientes.find(p => p.id === id);
 
-  if (!paciente) {
-    return res.status(404).json({
-      erro: 'Paciente não encontrado'
+  if (!idValido(id)) {
+    return res.status(400).json({
+      erro: 'ID inválido'
     });
   }
 
   const dados = req.body ?? {};
-
   const campos = Object.keys(dados);
 
   if (
@@ -222,44 +248,67 @@ app.patch('/pacientes/:id', (req, res) => {
     return res.status(400).json({ erro });
   }
 
-  if (
-    dados.email !== undefined &&
-    emailDuplicado(dados.email, id)
-  ) {
-    return res.status(409).json({
-      erro: 'Este e-mail já está cadastrado'
+  try {
+    const valores = campos.map(campo => {
+      if (campo === 'nome' || campo === 'email') {
+        return dados[campo].trim();
+      }
+
+      return dados[campo];
     });
-  }
 
-  if (dados.nome !== undefined) {
-    paciente.nome = dados.nome.trim();
-  }
+    const atualizacoes = campos.map(
+      (campo, indice) => `${campo} = $${indice + 1}`
+    );
 
-  if (dados.email !== undefined) {
-    paciente.email = dados.email.trim();
-  }
+    valores.push(id);
 
-  if (dados.nascimento !== undefined) {
-    paciente.nascimento = dados.nascimento;
-  }
+    const resultado = await pool.query(
+      `UPDATE pacientes
+       SET ${atualizacoes.join(', ')}
+       WHERE id = $${valores.length}
+       RETURNING ${COLUNAS}`,
+      valores
+    );
 
-  res.json(paciente);
+    if (resultado.rowCount === 0) {
+      return res.status(404).json({
+        erro: 'Paciente não encontrado'
+      });
+    }
+
+    res.json(resultado.rows[0]);
+  } catch (erro) {
+    tratarErro(res, erro);
+  }
 });
 
 // DELETE - Excluir paciente
-app.delete('/pacientes/:id', (req, res) => {
+app.delete('/pacientes/:id', async (req, res) => {
   const id = Number(req.params.id);
-  const indice = pacientes.findIndex(p => p.id === id);
 
-  if (indice === -1) {
-    return res.status(404).json({
-      erro: 'Paciente não encontrado'
+  if (!idValido(id)) {
+    return res.status(400).json({
+      erro: 'ID inválido'
     });
   }
 
-  pacientes.splice(indice, 1);
+  try {
+    const resultado = await pool.query(
+      'DELETE FROM pacientes WHERE id = $1',
+      [id]
+    );
 
-  res.status(204).send();
+    if (resultado.rowCount === 0) {
+      return res.status(404).json({
+        erro: 'Paciente não encontrado'
+      });
+    }
+
+    res.status(204).send();
+  } catch (erro) {
+    tratarErro(res, erro);
+  }
 });
 
 // Iniciar servidor
